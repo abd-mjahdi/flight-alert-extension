@@ -1,0 +1,16 @@
+body{
+    padding:0px 5px;
+    width: 350px;
+    height: 480px;
+    background-color: rgb(36, 36, 36);
+}
+.app-text{
+    color:rgb(212, 212, 212);
+    font-family: Arial;
+}
+#map-container{
+    width:345px;
+    height:240px;
+    border:solid white 1px;
+    
+}

@@ -1,33 +1,38 @@
 let inputCheckBox;
+const interval = 30000
+let timeBetweenActivations;
+let lastActivationTime
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     inputCheckBox = document.querySelector('#input');
     inputCheckBox.addEventListener("change", handleChange);
     persistState();
-});
+    lastActivationTime = await readLastActivationTime();
+}); 
 
-const interval = 30000
-let timeBetweenActivations;
-let start=Date.now();
+
 
 async function handleChange(){
     if(inputCheckBox.checked===true){
+
+        await chrome.storage.local.set({checked: true})
         
-        chrome.storage.local.set({checked: true})
-
-
-        timeBetweenActivations = Date.now() - start
-        if(timeBetweenActivations<interval){
-            await sleep(interval-timeBetweenActivations)
+        if(lastActivationTime===undefined){
+        }else{
+            timeBetweenActivations = Date.now() - lastActivationTime
+            if(timeBetweenActivations<interval){
+                await sleep(interval-timeBetweenActivations)
+            }
         }
+        chrome.runtime.sendMessage({checked:true})
+        await chrome.storage.local.set({lastActivationTime:Date.now()})
 
 
         
-        chrome.runtime.sendMessage({checked:true})
-        start=Date.now()
 
+        
     }else{
-        chrome.storage.local.set({checked: false})
+        await chrome.storage.local.set({checked: false})
         chrome.runtime.sendMessage({checked:false})
     }
 }
@@ -42,3 +47,7 @@ function sleep(ms){
     return new Promise(resolve => setTimeout(resolve,ms))
 }
 
+async function readLastActivationTime(){
+    let timeObject = await chrome.storage.local.get(['lastActivationTime'])
+    return timeObject.lastActivationTime;
+}

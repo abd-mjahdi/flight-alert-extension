@@ -16,7 +16,7 @@ async function handleChange(){
     if(inputCheckBox.checked===true){
 
         await chrome.storage.local.set({checked: true})
-        
+        lastActivationTime = await readLastActivationTime()
         if(lastActivationTime===undefined){
         }else{
             timeBetweenActivations = Date.now() - lastActivationTime
@@ -25,7 +25,8 @@ async function handleChange(){
             }
         }
         chrome.runtime.sendMessage({checked:true})
-        await chrome.storage.local.set({lastActivationTime:Date.now()})
+        lastActivationTime = Date.now()
+        await chrome.storage.local.set({lastActivationTime})
 
 
         
@@ -34,6 +35,8 @@ async function handleChange(){
     }else{
         await chrome.storage.local.set({checked: false})
         chrome.runtime.sendMessage({checked:false})
+        await chrome.storage.local.remove(['lastActivationTime'])
+        lastActivationTime = undefined
     }
 }
 

@@ -3,6 +3,7 @@
     "name":"SkyAlert",
     "version":"1.0",
     "permissions":["storage"],
+    "host_permissions": ["https://opensky-network.org/api/metadata/aircraft/icao/*"],
     "description" : "notifies when an airplane is near your location",
     "background":{
         "service_worker":"background.js"

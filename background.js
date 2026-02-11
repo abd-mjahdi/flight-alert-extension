@@ -26,14 +26,20 @@ async function processTrackingTick(){
     }
 
     const numberOfPlanes = getNumberOfPlanes(data)
-    const icao24s = getIcao24s(data);
-    const aircraftsData = await fetchAircraftInfosByIcao24s(icao24s);
-    console.log(aircraftsData);
-    
+    const preparedObjects = await prepareData(data)
+    const finalData = {
+        aircrafts : preparedObjects,
+        numberOfPlanesNearby : numberOfPlanes
+    }
+
+    sendAircraftsData(finalData)
+
+    //console.log(preparedObjects)
+
 }
 
-function sendAircraftsData(aircraftsData){
-    chrome.runtime.sendMessage({data : aircraftsData})
+function sendAircraftsData(finalData){
+    chrome.runtime.sendMessage({data : finalData})
 }
 
 function handleMessage(message){
@@ -49,12 +55,7 @@ function getIcao24s(data) {
 }
 
 function getNumberOfPlanes(data){
-    return data.states.length
-}
-
-async function fetchAircraftInfosByIcao24s(icao24s){
-    let aircraftsData = await Promise.all(icao24s.map(icao24 => fetchAircraftInfo(icao24)))
-    return aircraftsData;
+    return data?.states?.length || 0
 }
 
 async function fetchAircraftInfo(icao24){
@@ -82,16 +83,28 @@ function stopTracking(){
 
 }
 
-function prepareData(data){
-    const states = data.states
-    const preparedObjects = states.map(state => new Aircraft(state[1],state[0],state[7],null,null,state[9]))
-    return preparedObjects
+async function prepareData(data) {
+  const states = data.states;
+  
+  if (!states || !Array.isArray(states)) {
+    return [];
+  }
+
+  const preparedObjects = await Promise.all(
+    states.map(async state => {
+      const aircraftInfo = await fetchAircraftInfo(state[0]);
+      return new Aircraft(state[1], aircraftInfo, state[7], null, null, state[9]);
+    })
+  );
+
+  return preparedObjects;
 }
 
+
 class Aircraft{
-    constructor(callSign , icao24 , altitude , distance , direction , velocity){
+    constructor(callSign , type , altitude , distance , direction , velocity){
         this.callSign = callSign
-        this.icao24 = icao24
+        this.type = type
         this.altitude = altitude
         this.distance = distance
         this.direction = direction

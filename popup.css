@@ -1,16 +1,155 @@
-body{
-    padding:0px 5px;
-    width: 350px;
-    height: 480px;
-    background-color: rgb(36, 36, 36);
+/* SkyAlert popup — dark aviation theme */
+:root {
+    --bg: #0f1419;
+    --surface: #1a2332;
+    --surface-hover: #243044;
+    --border: #2d3a4d;
+    --text: #e6edf3;
+    --text-muted: #8b9cb3;
+    --accent: #58a6ff;
+    --accent-soft: rgba(88, 166, 255, 0.15);
+    --success: #3fb950;
+    --radius: 10px;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
-.app-text{
-    color:rgb(212, 212, 212);
-    font-family: Arial;
+
+* {
+    box-sizing: border-box;
 }
-#map-container{
-    width:345px;
-    height:240px;
-    border:solid white 1px;
-    
+
+body {
+    margin: 0;
+    padding: 0;
+    width: 380px;
+    min-height: 420px;
+    max-height: 560px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    display: flex;
+    flex-direction: column;
+}
+
+#header {
+    flex-shrink: 0;
+    padding: 14px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+#app-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text);
+}
+
+#header label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+#checkbox-input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.plane-count {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+#plane-count-value {
+    font-weight: 600;
+    color: var(--accent);
+}
+
+#cards-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#cards-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+#cards-container::-webkit-scrollbar-track {
+    background: var(--bg);
+}
+
+#cards-container::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+#cards-container::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+.plane-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.plane-card:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent-soft);
+}
+
+.plane-card .top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+}
+
+.plane-card .callsign {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text);
+}
+
+.plane-card .distance {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.plane-card .type {
+    font-size: 13px;
+    color: var(--accent);
+    margin-bottom: 4px;
+}
+
+.plane-card .info {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+#footer {
+    flex-shrink: 0;
+    padding: 10px 16px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-muted);
 }

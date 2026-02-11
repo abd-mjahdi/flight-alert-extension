@@ -1,17 +1,27 @@
 <!DOCTYPE html>
 <html>
     <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <link rel="stylesheet" href="popup.css">
         <title>SkyAlert</title>
     </head>
-    <body>
-        <div id="container">
-            <h2 id="app-title" class="app-text">SkyAlert</h2>
-            <p class="app-text">Tracking</p><input id="input" type="checkbox"></input>
+    <body class="app-text">
+        <header id="header">
+            <h2 id="app-title">SkyAlert</h2>
+            <label class="app-text">
+                <input id="checkbox-input" type="checkbox">
+                Tracking
+            </label>
+            <div class="plane-count"><span id="plane-count-value">0</span> aircrafts nearby</div>
+        </header>
+
+        <div id="cards-container">
+            
         </div>
+        <footer id="footer">
+            settings go here
+        </footer>
         <script src="popup.js"></script>
     </body>
-    
-
-
 </html>

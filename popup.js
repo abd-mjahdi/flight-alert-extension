@@ -1,16 +1,24 @@
 let inputCheckBox;
+let cardsContainer;
+let planeCountSpan;
 const interval = 30000
 let timeBetweenActivations;
 let lastActivationTime
 
 document.addEventListener("DOMContentLoaded", async () => {
-    inputCheckBox = document.querySelector('#input');
+    inputCheckBox = document.querySelector('#checkbox-input')
+    cardsContainer = document.querySelector('#cards-container')
+    planeCountSpan = document.querySelector('#plane-count-value')
+    
+
     inputCheckBox.addEventListener("change", handleChange);
+
     persistState();
+
     lastActivationTime = await readLastActivationTime();
 }); 
 
-
+chrome.runtime.onMessage.addListener(handleBackgroundMessage)
 
 
 async function handleChange(){
@@ -36,15 +44,13 @@ async function handleChange(){
     }else{
         await chrome.storage.local.set({checked: false})
         chrome.runtime.sendMessage({checked:false})
-        await chrome.storage.local.remove(['lastActivationTime'])
-        lastActivationTime = undefined
+        // Intentionally keep lastActivationTime so users can't bypass throttling
     }
 }
 
 async function persistState(){
     let state = await chrome.storage.local.get(['checked'])
     inputCheckBox.checked=state.checked || false
-    console.log(state)
 }
 
 function sleep(ms){
@@ -56,3 +62,74 @@ async function readLastActivationTime(){
     return timeObject.lastActivationTime;
 }
 
+function handleBackgroundMessage(message){
+    // Background sends { data: finalData }; payload is message.data
+    const data = message?.data
+    if (!data) return
+    displayAircrafts(data)
+    displayPlaneCount(data)
+    
+
+
+
+
+}
+
+//will handle ui dynamically here
+function sanitize(val) {
+    if (val == null || val === '') return ''
+    const s = String(val).trim()
+    return s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') || ''
+}
+function sanitizeNum(val) {
+    if (val == null || val === '') return '—'
+    const n = Number(val)
+    return isNaN(n) ? '—' : n
+}
+
+function createCard(data){
+    const planeCard = document.createElement('div')
+    planeCard.classList.add("plane-card")
+
+    const topSection = document.createElement('div')
+    topSection.classList.add("top")
+
+    const callSignSpan = document.createElement('span')
+    callSignSpan.classList.add("callsign")
+    callSignSpan.textContent = sanitize(data?.callSign) || '—'
+    
+    const distanceSpan = document.createElement('span')
+    distanceSpan.classList.add("distance")
+    distanceSpan.textContent = (data?.distance != null ? data.distance : '—') + ' km'
+
+    const typeSection = document.createElement('div')
+    typeSection.classList.add("type")
+    typeSection.textContent = sanitize(data?.type) || '—'
+
+    const infoSection = document.createElement('div')
+    infoSection.classList.add("info")
+    infoSection.textContent = `${sanitizeNum(data?.altitude)} ft • ${sanitizeNum(data?.velocity)} km/h • ${sanitize(data?.direction) || '—'}`
+
+    //appending children
+    topSection.appendChild(callSignSpan)
+    topSection.appendChild(distanceSpan)
+
+    planeCard.appendChild(topSection)
+    planeCard.appendChild(typeSection)
+    planeCard.appendChild(infoSection)
+    
+    return planeCard
+}
+
+function displayAircrafts(data){
+    const aircrafts = data?.aircrafts
+    if (!aircrafts || !Array.isArray(aircrafts)) return
+    cardsContainer.replaceChildren()
+    const planeCards = aircrafts.map(aircraft => createCard(aircraft))
+    planeCards.forEach(card => cardsContainer.appendChild(card))
+}
+
+function displayPlaneCount(data){
+    const planeCount = data?.numberOfPlanesNearby ?? 0
+    if (planeCountSpan) planeCountSpan.textContent = planeCount
+}

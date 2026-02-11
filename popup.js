@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 
+
 async function handleChange(){
     if(inputCheckBox.checked===true){
 
@@ -54,3 +55,4 @@ async function readLastActivationTime(){
     let timeObject = await chrome.storage.local.get(['lastActivationTime'])
     return timeObject.lastActivationTime;
 }
+

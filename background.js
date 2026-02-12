@@ -1,11 +1,23 @@
 const interval = 30000;
 let intervalFunctionId;
+let currentArea = null;
 
-chrome.runtime.onMessage.addListener(handleMessage)
+const DEFAULT_AREA = {
+    lamin: 24.8,
+    lamax: 25.4,
+    lomin: 55.0,
+    lomax: 55.8
+};
+
+chrome.runtime.onMessage.addListener(handleCheckboxStatus)
+chrome.runtime.onMessage.addListener(handleUserLocation)
 
 async function fetchStatesInArea(){
+    const area = currentArea || DEFAULT_AREA;
+    console.log(area)
+    const url = `https://opensky-network.org/api/states/all?lamin=${area.lamin}&lamax=${area.lamax}&lomin=${area.lomin}&lomax=${area.lomax}`;
     try{
-        const response = await fetch("https://opensky-network.org/api/states/all?lamin=24.8&lamax=25.4&lomin=55.0&lomax=55.8");
+        const response = await fetch(url);
         if(!response.ok){
             throw new Error("could not fetch resource");
         }
@@ -39,16 +51,40 @@ async function processTrackingTick(){
 }
 
 function sendAircraftsData(finalData){
-    chrome.runtime.sendMessage({data : finalData})
+    chrome.runtime.sendMessage({
+        type :"data",
+        data : finalData})
 }
 
-function handleMessage(message){
+function handleCheckboxStatus(message){
+    if(message.type!=="checkboxStatus"){
+        return
+    }
     if(message.checked===true){
         startTracking()
     }else{
         stopTracking()
     }
+    
 }
+
+function handleUserLocation(message){
+    if(!message || message.type !== "position") return;
+
+    const { lat, lon, radius } = message; // km
+
+    const latDelta = radius / 111;
+    const lonDelta = radius / (111 * Math.abs(Math.cos(lat * Math.PI / 180)));
+
+    currentArea = {
+        lamin: lat - latDelta,
+        lamax: lat + latDelta,
+        lomin: lon - lonDelta,
+        lomax: lon + lonDelta
+    };
+}
+
+
 
 function getIcao24s(data) {
   return data.states.map(state => state[0]);

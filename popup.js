@@ -1,6 +1,9 @@
 let inputCheckBox;
 let cardsContainer;
 let planeCountSpan;
+let latInput;
+let lonInput;
+let radiusInput;
 const interval = 30000
 let timeBetweenActivations;
 let lastActivationTime
@@ -9,22 +12,38 @@ document.addEventListener("DOMContentLoaded", async () => {
     inputCheckBox = document.querySelector('#checkbox-input')
     cardsContainer = document.querySelector('#cards-container')
     planeCountSpan = document.querySelector('#plane-count-value')
+    latInput = document.querySelector('#lat-input')
+    lonInput = document.querySelector('#lon-input')
+    radiusInput = document.querySelector('#radius-input')
     
 
     inputCheckBox.addEventListener("change", handleChange);
 
     persistState();
-
+    loadLocationInputs();
+    await loadLastData();
     lastActivationTime = await readLastActivationTime();
 }); 
+
+
 
 chrome.runtime.onMessage.addListener(handleBackgroundMessage)
 
 
 async function handleChange(){
     if(inputCheckBox.checked===true){
+        const lat = parseFloat(latInput.value)
+        const lon = parseFloat(lonInput.value)
+        const radius = parseFloat(radiusInput.value)
 
-        await chrome.storage.local.set({checked: true})
+        if (isNaN(lat) || isNaN(lon) || isNaN(radius)) {
+            alert("Please enter valid numbers for latitude, longitude and radius.")
+            inputCheckBox.checked = false
+            await chrome.storage.local.set({checked: false})
+            return
+        }
+
+        await chrome.storage.local.set({checked: true, lat: lat, lon: lon, radius: radius})
         lastActivationTime = await readLastActivationTime()
         if(lastActivationTime===undefined){
         }else{
@@ -33,7 +52,17 @@ async function handleChange(){
                 await sleep(interval-timeBetweenActivations)
             }
         }
-        chrome.runtime.sendMessage({checked:true})
+
+        chrome.runtime.sendMessage({
+            type : "position",
+            lat : lat,
+            lon : lon,
+            radius : radius
+        }, () => {
+            chrome.runtime.sendMessage({
+                type : "checkboxStatus",
+                checked:true})
+        })
         lastActivationTime = Date.now()
         await chrome.storage.local.set({lastActivationTime})
 
@@ -43,7 +72,9 @@ async function handleChange(){
         
     }else{
         await chrome.storage.local.set({checked: false})
-        chrome.runtime.sendMessage({checked:false})
+        chrome.runtime.sendMessage({
+            type : "checkboxStatus",
+            checked:false})
         // Intentionally keep lastActivationTime so users can't bypass throttling
     }
 }
@@ -51,6 +82,19 @@ async function handleChange(){
 async function persistState(){
     let state = await chrome.storage.local.get(['checked'])
     inputCheckBox.checked=state.checked || false
+}
+
+async function loadLocationInputs(){
+    let locationData = await chrome.storage.local.get(['lat', 'lon', 'radius'])
+    if (latInput) {
+        latInput.value = locationData.lat !== undefined ? locationData.lat : ''
+    }
+    if (lonInput) {
+        lonInput.value = locationData.lon !== undefined ? locationData.lon : ''
+    }
+    if (radiusInput) {
+        radiusInput.value = locationData.radius !== undefined ? locationData.radius : ''
+    }
 }
 
 function sleep(ms){
@@ -64,8 +108,13 @@ async function readLastActivationTime(){
 
 function handleBackgroundMessage(message){
     // Background sends { data: finalData }; payload is message.data
+    if(message.type!=="data"){
+        return
+    }
     const data = message?.data
     if (!data) return
+    // save last data so we can show cards after popup reopen
+    chrome.storage.local.set({ lastData: data })
     displayAircrafts(data)
     displayPlaneCount(data)
     
@@ -85,6 +134,14 @@ function sanitizeNum(val) {
     if (val == null || val === '') return '—'
     const n = Number(val)
     return isNaN(n) ? '—' : n
+}
+
+async function loadLastData() {
+    let stored = await chrome.storage.local.get(['lastData'])
+    if (stored && stored.lastData) {
+        displayAircrafts(stored.lastData)
+        displayPlaneCount(stored.lastData)
+    }
 }
 
 function createCard(data){
@@ -108,7 +165,7 @@ function createCard(data){
 
     const infoSection = document.createElement('div')
     infoSection.classList.add("info")
-    infoSection.textContent = `${sanitizeNum(data?.altitude)} ft • ${sanitizeNum(data?.velocity)} km/h • ${sanitize(data?.direction) || '—'}`
+    infoSection.textContent = `${sanitizeNum(data?.altitude)} ft • ${sanitizeNum(Math.round((data?.velocity ?? 0) * 3.6))} km/h • ${sanitize(data?.direction) || '—'}`
 
     //appending children
     topSection.appendChild(callSignSpan)
@@ -127,6 +184,7 @@ function displayAircrafts(data){
     cardsContainer.replaceChildren()
     const planeCards = aircrafts.map(aircraft => createCard(aircraft))
     planeCards.forEach(card => cardsContainer.appendChild(card))
+    
 }
 
 function displayPlaneCount(data){

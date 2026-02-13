@@ -34,6 +34,7 @@ async function fetchStatesInArea(){
 async function processTrackingTick(){
     const data = await fetchStatesInArea();
     if(!data || !data.states){
+        sendAircraftsData({ aircrafts: [], numberOfPlanesNearby: 0 });
         return;
     }
 

@@ -58,10 +58,10 @@ async function handleChange(){
             lat : lat,
             lon : lon,
             radius : radius
-        }, () => {
-            chrome.runtime.sendMessage({
-                type : "checkboxStatus",
-                checked:true})
+        })
+        chrome.runtime.sendMessage({
+            type : "checkboxStatus",
+            checked: true
         })
         lastActivationTime = Date.now()
         await chrome.storage.local.set({lastActivationTime})
@@ -182,9 +182,15 @@ function displayAircrafts(data){
     const aircrafts = data?.aircrafts
     if (!aircrafts || !Array.isArray(aircrafts)) return
     cardsContainer.replaceChildren()
+    if (aircrafts.length === 0) {
+        const msg = document.createElement('p')
+        msg.className = 'no-planes-msg'
+        msg.textContent = 'No planes nearby'
+        cardsContainer.appendChild(msg)
+        return
+    }
     const planeCards = aircrafts.map(aircraft => createCard(aircraft))
     planeCards.forEach(card => cardsContainer.appendChild(card))
-    
 }
 
 function displayPlaneCount(data){

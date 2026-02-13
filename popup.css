@@ -104,6 +104,14 @@ body {
     background: var(--text-muted);
 }
 
+.no-planes-msg {
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+    margin: 0;
+    padding: 16px;
+}
+
 .plane-card {
     background: var(--surface);
     border: 1px solid var(--border);

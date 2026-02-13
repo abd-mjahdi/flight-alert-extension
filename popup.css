@@ -148,9 +148,49 @@ body {
 
 #footer {
     flex-shrink: 0;
-    padding: 10px 16px;
+    padding: 14px 16px;
     background: var(--surface);
     border-top: 1px solid var(--border);
     font-size: 12px;
     color: var(--text-muted);
+}
+
+#footer > div {
+    margin-bottom: 10px;
+}
+
+#footer > div:last-child {
+    margin-bottom: 0;
+}
+
+#footer label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: text;
+    min-width: 0;
+    width: 100%;
+}
+
+#footer input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+}
+
+#footer input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+#footer input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.8;
 }

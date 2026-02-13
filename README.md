@@ -14,7 +14,6 @@ SkyAlert is a browser extension that notifies you when an airplane is flying nea
 - HTML / CSS  
 - Browser Extension APIs  
 - OpenSky Network API  
-- Geolocation API  
 
 ## How It Works
 1. Gets your location from the browser.  

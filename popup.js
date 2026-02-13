@@ -165,7 +165,7 @@ function createCard(data){
 
     const infoSection = document.createElement('div')
     infoSection.classList.add("info")
-    infoSection.textContent = `${sanitizeNum(data?.altitude)} ft • ${sanitizeNum(Math.round((data?.velocity ?? 0) * 3.6))} km/h • ${sanitize(data?.direction) || '—'}`
+    infoSection.textContent = `${sanitizeNum(data?.altitude)} m • ${sanitizeNum(Math.round((data?.velocity ?? 0) * 3.6))} km/h • ${sanitize(data?.direction) || '—'}`
 
     //appending children
     topSection.appendChild(callSignSpan)

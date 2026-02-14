@@ -41,8 +41,12 @@ async function processTrackingTick(){
         return;
     }
 
+    const area = currentArea || DEFAULT_AREA
+    const centerLat = (area.lamin + area.lamax) / 2
+    const centerLon = (area.lomin + area.lomax) / 2
+
     const numberOfPlanes = getNumberOfPlanes(data)
-    const preparedObjects = await prepareData(data)
+    const preparedObjects = await prepareData(data, centerLat, centerLon)
     const finalData = {
         aircrafts : preparedObjects,
         numberOfPlanesNearby : numberOfPlanes
@@ -99,6 +103,15 @@ function getNumberOfPlanes(data){
     return data?.states?.length || 0
 }
 
+function haversineKm(lat1, lon1, lat2, lon2) {
+    const R = 6371
+    const dLat = (lat2 - lat1) * Math.PI / 180
+    const dLon = (lon2 - lon1) * Math.PI / 180
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return R * c
+}
+
 async function fetchAircraftInfo(icao24){
     try{
         const response = await fetch(`https://opensky-network.org/api/metadata/aircraft/icao/${icao24}`)
@@ -149,9 +162,9 @@ function restoreTrackingIfNeeded() {
 
 restoreTrackingIfNeeded()
 
-async function prepareData(data) {
+async function prepareData(data, centerLat, centerLon) {
   const states = data.states;
-  
+
   if (!states || !Array.isArray(states)) {
     return [];
   }
@@ -159,22 +172,22 @@ async function prepareData(data) {
   const preparedObjects = await Promise.all(
     states.map(async state => {
       const aircraftInfo = await fetchAircraftInfo(state[0]);
-      return new Aircraft(state[1], aircraftInfo, state[7], null, null, state[9]);
+      const planeLat = state[6] != null ? Number(state[6]) : NaN;
+      const planeLon = state[5] != null ? Number(state[5]) : NaN;
+      let distance = null;
+      if (!Number.isNaN(planeLat) && !Number.isNaN(planeLon)) {
+        distance = Math.round(haversineKm(centerLat, centerLon, planeLat, planeLon) * 10) / 10;
+      }
+      return {
+        callSign: state[1],
+        type: aircraftInfo,
+        altitude: state[7],
+        distance: distance,
+        direction: state[10],
+        velocity: state[9]
+      };
     })
   );
 
   return preparedObjects;
-}
-
-
-class Aircraft{
-    constructor(callSign , type , altitude , distance , direction , velocity){
-        this.callSign = callSign
-        this.type = type
-        this.altitude = altitude
-        this.distance = distance
-        this.direction = direction
-        this.velocity = velocity
-    }
-
 }

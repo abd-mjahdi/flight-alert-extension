@@ -1,5 +1,5 @@
+const TRACKING_ALARM = 'tracking';
 const interval = 30000;
-let intervalFunctionId;
 let currentArea = null;
 
 const DEFAULT_AREA = {
@@ -11,10 +11,13 @@ const DEFAULT_AREA = {
 
 chrome.runtime.onMessage.addListener(handleCheckboxStatus)
 chrome.runtime.onMessage.addListener(handleUserLocation)
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === TRACKING_ALARM) processTrackingTick()
+})
 
 async function fetchStatesInArea(){
     const area = currentArea || DEFAULT_AREA;
-    console.log(area)
+    //console.log(area)
     const url = `https://opensky-network.org/api/states/all?lamin=${area.lamin}&lamax=${area.lamax}&lomin=${area.lomin}&lomax=${area.lomax}`;
     try{
         const response = await fetch(url);
@@ -52,9 +55,20 @@ async function processTrackingTick(){
 }
 
 function sendAircraftsData(finalData){
-    chrome.runtime.sendMessage({
-        type :"data",
-        data : finalData})
+    const count = finalData?.numberOfPlanesNearby ?? 0
+    try {
+        if (count > 0) {
+            chrome.action.setBadgeText({ text: count > 99 ? '99+' : String(count) })
+            chrome.action.setBadgeBackgroundColor({ color: '#58a6ff' })
+        } else {
+            chrome.action.setBadgeText({ text: '' })
+        }
+    } catch (e) {
+        console.warn('Badge update failed', e)
+    }
+    // Persist so popup shows latest data when opened (popup may be closed when we send)
+    chrome.storage.local.set({ lastData: finalData })
+    chrome.runtime.sendMessage({ type: "data", data: finalData }).catch(() => {})
 }
 
 function handleCheckboxStatus(message){
@@ -71,18 +85,8 @@ function handleCheckboxStatus(message){
 
 function handleUserLocation(message){
     if(!message || message.type !== "position") return;
-
-    const { lat, lon, radius } = message; // km
-
-    const latDelta = radius / 111;
-    const lonDelta = radius / (111 * Math.abs(Math.cos(lat * Math.PI / 180)));
-
-    currentArea = {
-        lamin: lat - latDelta,
-        lamax: lat + latDelta,
-        lomin: lon - lonDelta,
-        lomax: lon + lonDelta
-    };
+    const { lat, lon, radius } = message;
+    setAreaFromLatLonRadius(lat, lon, radius);
 }
 
 
@@ -110,15 +114,40 @@ async function fetchAircraftInfo(icao24){
     }
 }
 
-async function startTracking(){
+function startTracking(){
     processTrackingTick()
-    intervalFunctionId = setInterval(processTrackingTick, interval)
+    chrome.alarms.create(TRACKING_ALARM, { periodInMinutes: interval / 60000 })
 }
 
 function stopTracking(){
-    clearInterval(intervalFunctionId)
-
+    chrome.alarms.clear(TRACKING_ALARM)
+    try { chrome.action.setBadgeText({ text: '' }) } catch (_) {}
 }
+
+function setAreaFromLatLonRadius(lat, lon, radius) {
+    const latDelta = radius / 111
+    const lonDelta = radius / (111 * Math.abs(Math.cos(lat * Math.PI / 180)))
+    currentArea = {
+        lamin: lat - latDelta,
+        lamax: lat + latDelta,
+        lomin: lon - lonDelta,
+        lomax: lon + lonDelta
+    }
+}
+
+function restoreTrackingIfNeeded() {
+    chrome.storage.local.get(['checked', 'lat', 'lon', 'radius'], (result) => {
+        if (result.checked !== true) return
+        const lat = result.lat
+        const lon = result.lon
+        const radius = result.radius
+        if (typeof lat !== 'number' || typeof lon !== 'number' || typeof radius !== 'number') return
+        setAreaFromLatLonRadius(lat, lon, radius)
+        startTracking()
+    })
+}
+
+restoreTrackingIfNeeded()
 
 async function prepareData(data) {
   const states = data.states;

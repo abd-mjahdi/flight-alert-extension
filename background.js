@@ -1,6 +1,10 @@
 const TRACKING_ALARM = 'tracking';
 const interval = 30000;
+const FETCH_BOX_MARGIN = 1.2;
+const DISTANCE_TOLERANCE_KM = 0.2;
 let currentArea = null;
+let userLat = null;
+let userLon = null;
 let searchRadiusKm = null;
 let tickInProgress = false;
 const aircraftModelCache = {};
@@ -75,8 +79,8 @@ async function processTrackingTick() {
         }
 
         const area = currentArea || DEFAULT_AREA;
-        const centerLat = (area.lamin + area.lamax) / 2;
-        const centerLon = (area.lomin + area.lomax) / 2;
+        const centerLat = userLat ?? (area.lamin + area.lamax) / 2;
+        const centerLon = userLon ?? (area.lomin + area.lomax) / 2;
         const radiusKm = searchRadiusKm;
 
         const preparedObjects = await prepareData(data, centerLat, centerLon, radiusKm);
@@ -151,8 +155,11 @@ function stopTracking() {
 
 function setAreaFromLatLonRadius(lat, lon, radius) {
     searchRadiusKm = radius;
-    const latDelta = radius / 111;
-    const lonDelta = radius / (111 * Math.abs(Math.cos(lat * Math.PI / 180)));
+    userLat = lat;
+    userLon = lon;
+    const fetchRadiusKm = radius * FETCH_BOX_MARGIN;
+    const latDelta = fetchRadiusKm / 111;
+    const lonDelta = fetchRadiusKm / (111 * Math.abs(Math.cos(lat * Math.PI / 180)));
     currentArea = {
         lamin: lat - latDelta,
         lamax: lat + latDelta,
@@ -183,14 +190,21 @@ async function prepareData(data, centerLat, centerLon, radiusKm) {
         states.map(async (state) => {
             const planeLat = state[6] != null ? Number(state[6]) : NaN;
             const planeLon = state[5] != null ? Number(state[5]) : NaN;
-            if (Number.isNaN(planeLat) || Number.isNaN(planeLon)) return null;
+            const hasPosition = !Number.isNaN(planeLat) && !Number.isNaN(planeLon);
 
-            const distance = Math.round(haversineKm(centerLat, centerLon, planeLat, planeLon) * 10) / 10;
-            if (radiusKm != null && distance > radiusKm) return null;
+            let distance = null;
+            if (hasPosition) {
+                distance = Math.round(haversineKm(centerLat, centerLon, planeLat, planeLon) * 10) / 10;
+                if (radiusKm != null && distance > radiusKm + DISTANCE_TOLERANCE_KM) {
+                    return null;
+                }
+            } else if (radiusKm != null) {
+                return null;
+            }
 
             const aircraftInfo = await getAircraftModel(state[0]);
             return {
-                callSign: state[1],
+                callSign: state[1] != null ? String(state[1]).trim() : null,
                 type: aircraftInfo,
                 altitude: state[7],
                 distance: distance,

@@ -3,6 +3,7 @@ let cardsContainer;
 let planeCountSpan;
 let statusMessage;
 let locationToggle;
+let locationUpdateBtn;
 let locationFields;
 let latInput;
 let lonInput;
@@ -17,6 +18,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     planeCountSpan = document.querySelector('#plane-count-value')
     statusMessage = document.querySelector('#status-message')
     locationToggle = document.querySelector('#location-toggle')
+    locationUpdateBtn = document.querySelector('#location-update')
     locationFields = document.querySelector('#location-fields')
     latInput = document.querySelector('#lat-input')
     lonInput = document.querySelector('#lon-input')
@@ -24,6 +26,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     inputCheckBox.addEventListener("change", handleChange);
     locationToggle.addEventListener("click", toggleLocationFields);
+    locationUpdateBtn.addEventListener("click", applyLocationUpdate);
 
     await persistState();
     await loadLocationPanelState();
@@ -127,6 +130,30 @@ function showLocationFields(open) {
 
 function toggleLocationFields() {
     showLocationFields(locationFields.hidden)
+}
+
+async function applyLocationUpdate() {
+    const lat = parseFloat(latInput.value)
+    const lon = parseFloat(lonInput.value)
+    const radius = parseFloat(radiusInput.value)
+
+    const validation = validateLocation(lat, lon, radius)
+    if (!validation.ok) {
+        showLocationFields(true)
+        alert(validation.message)
+        return
+    }
+
+    await chrome.storage.local.set({ lat: lat, lon: lon, radius: radius })
+
+    if (inputCheckBox.checked) {
+        chrome.runtime.sendMessage({
+            type: 'startTracking',
+            lat: lat,
+            lon: lon,
+            radius: radius
+        })
+    }
 }
 
 async function loadLocationPanelState() {

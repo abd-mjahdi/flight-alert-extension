@@ -9,9 +9,12 @@
     <body class="app-text">
         <header id="header">
             <h2 id="app-title">SkyAlert</h2>
-            <label class="app-text">
+            <label class="tracking-toggle">
                 <input id="checkbox-input" type="checkbox">
-                Tracking
+                <span class="toggle-track" aria-hidden="true">
+                    <span class="toggle-thumb"></span>
+                </span>
+                <span class="toggle-label">Tracking</span>
             </label>
             <div class="plane-count"><span id="plane-count-value">0</span> aircrafts nearby</div>
         </header>
@@ -21,9 +24,14 @@
         <div id="cards-container">
         </div>
         <footer id="footer">
-            <button type="button" id="location-toggle" class="location-toggle" aria-expanded="false">
-                Location
-            </button>
+            <div class="location-row">
+                <button type="button" id="location-toggle" class="location-toggle" aria-expanded="false">
+                    Location
+                </button>
+                <button type="button" id="location-update" class="location-update" title="Apply location">
+                    ↻
+                </button>
+            </div>
             <div id="location-fields" class="location-fields" hidden>
             <div>
                 <label>

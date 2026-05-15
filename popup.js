@@ -1,6 +1,7 @@
 let inputCheckBox;
 let cardsContainer;
 let planeCountSpan;
+let statusMessage;
 let latInput;
 let lonInput;
 let radiusInput;
@@ -12,23 +13,40 @@ document.addEventListener("DOMContentLoaded", async () => {
     inputCheckBox = document.querySelector('#checkbox-input')
     cardsContainer = document.querySelector('#cards-container')
     planeCountSpan = document.querySelector('#plane-count-value')
+    statusMessage = document.querySelector('#status-message')
     latInput = document.querySelector('#lat-input')
     lonInput = document.querySelector('#lon-input')
     radiusInput = document.querySelector('#radius-input')
-    
 
     inputCheckBox.addEventListener("change", handleChange);
 
-    persistState();
+    await persistState();
     loadLocationInputs();
     await loadLastData();
+    await syncTrackingIfChecked();
     lastActivationTime = await readLastActivationTime();
-}); 
-
-
+});
 
 chrome.runtime.onMessage.addListener(handleBackgroundMessage)
 
+function validateLocation(lat, lon, radius) {
+    if (isNaN(lat) || isNaN(lon) || isNaN(radius)) {
+        return { ok: false, message: 'Please enter valid numbers for latitude, longitude and radius.' }
+    }
+    if (lat < -90 || lat > 90) {
+        return { ok: false, message: 'Latitude must be between -90 and 90.' }
+    }
+    if (lon < -180 || lon > 180) {
+        return { ok: false, message: 'Longitude must be between -180 and 180.' }
+    }
+    if (radius <= 0) {
+        return { ok: false, message: 'Radius must be greater than 0 km.' }
+    }
+    if (radius > 500) {
+        return { ok: false, message: 'Radius must be 500 km or less.' }
+    }
+    return { ok: true }
+}
 
 async function handleChange(){
     if(inputCheckBox.checked===true){
@@ -36,8 +54,9 @@ async function handleChange(){
         const lon = parseFloat(lonInput.value)
         const radius = parseFloat(radiusInput.value)
 
-        if (isNaN(lat) || isNaN(lon) || isNaN(radius)) {
-            alert("Please enter valid numbers for latitude, longitude and radius.")
+        const validation = validateLocation(lat, lon, radius)
+        if (!validation.ok) {
+            alert(validation.message)
             inputCheckBox.checked = false
             await chrome.storage.local.set({checked: false})
             return
@@ -45,8 +64,7 @@ async function handleChange(){
 
         await chrome.storage.local.set({checked: true, lat: lat, lon: lon, radius: radius})
         lastActivationTime = await readLastActivationTime()
-        if(lastActivationTime===undefined){
-        }else{
+        if(lastActivationTime!==undefined){
             timeBetweenActivations = Date.now() - lastActivationTime
             if(timeBetweenActivations<interval){
                 await sleep(interval-timeBetweenActivations)
@@ -54,34 +72,43 @@ async function handleChange(){
         }
 
         chrome.runtime.sendMessage({
-            type : "position",
-            lat : lat,
-            lon : lon,
-            radius : radius
-        })
-        chrome.runtime.sendMessage({
-            type : "checkboxStatus",
-            checked: true
+            type: 'startTracking',
+            lat: lat,
+            lon: lon,
+            radius: radius
         })
         lastActivationTime = Date.now()
         await chrome.storage.local.set({lastActivationTime})
-
-
-        
-
-        
     }else{
         await chrome.storage.local.set({checked: false})
         chrome.runtime.sendMessage({
             type : "checkboxStatus",
             checked:false})
-        // Intentionally keep lastActivationTime so users can't bypass throttling
     }
 }
 
 async function persistState(){
     let state = await chrome.storage.local.get(['checked'])
     inputCheckBox.checked=state.checked || false
+}
+
+async function syncTrackingIfChecked() {
+    const state = await chrome.storage.local.get(['checked', 'lat', 'lon', 'radius'])
+    if (state.checked !== true) return
+
+    const lat = typeof state.lat === 'number' ? state.lat : parseFloat(state.lat)
+    const lon = typeof state.lon === 'number' ? state.lon : parseFloat(state.lon)
+    const radius = typeof state.radius === 'number' ? state.radius : parseFloat(state.radius)
+
+    const validation = validateLocation(lat, lon, radius)
+    if (!validation.ok) return
+
+    chrome.runtime.sendMessage({
+        type: 'startTracking',
+        lat: lat,
+        lon: lon,
+        radius: radius
+    })
 }
 
 async function loadLocationInputs(){
@@ -107,24 +134,16 @@ async function readLastActivationTime(){
 }
 
 function handleBackgroundMessage(message){
-    // Background sends { data: finalData }; payload is message.data
     if(message.type!=="data"){
         return
     }
     const data = message?.data
     if (!data) return
-    // save last data so we can show cards after popup reopen
     chrome.storage.local.set({ lastData: data })
     displayAircrafts(data)
     displayPlaneCount(data)
-    
-
-
-
-
 }
 
-//will handle ui dynamically here
 function sanitize(val) {
     if (val == null || val === '') return ''
     const s = String(val).trim()
@@ -134,6 +153,17 @@ function sanitizeNum(val) {
     if (val == null || val === '') return '—'
     const n = Number(val)
     return isNaN(n) ? '—' : n
+}
+
+function showStatusError(text) {
+    if (!statusMessage) return
+    if (text) {
+        statusMessage.textContent = text
+        statusMessage.hidden = false
+    } else {
+        statusMessage.textContent = ''
+        statusMessage.hidden = true
+    }
 }
 
 async function loadLastData() {
@@ -167,7 +197,6 @@ function createCard(data){
     infoSection.classList.add("info")
     infoSection.textContent = `${sanitizeNum(data?.altitude)} m • ${sanitizeNum(Math.round((data?.velocity ?? 0) * 3.6))} km/h`
 
-    //appending children
     topSection.appendChild(callSignSpan)
     topSection.appendChild(distanceSpan)
 
@@ -181,6 +210,18 @@ function createCard(data){
 function displayAircrafts(data){
     const aircrafts = data?.aircrafts
     if (!aircrafts || !Array.isArray(aircrafts)) return
+
+    if (data.error) {
+        showStatusError(data.error)
+        cardsContainer.replaceChildren()
+        const msg = document.createElement('p')
+        msg.className = 'no-planes-msg'
+        msg.textContent = data.error
+        cardsContainer.appendChild(msg)
+        return
+    }
+
+    showStatusError('')
     cardsContainer.replaceChildren()
     if (aircrafts.length === 0) {
         const msg = document.createElement('p')

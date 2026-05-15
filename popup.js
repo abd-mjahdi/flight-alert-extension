@@ -2,6 +2,8 @@ let inputCheckBox;
 let cardsContainer;
 let planeCountSpan;
 let statusMessage;
+let locationToggle;
+let locationFields;
 let latInput;
 let lonInput;
 let radiusInput;
@@ -14,13 +16,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     cardsContainer = document.querySelector('#cards-container')
     planeCountSpan = document.querySelector('#plane-count-value')
     statusMessage = document.querySelector('#status-message')
+    locationToggle = document.querySelector('#location-toggle')
+    locationFields = document.querySelector('#location-fields')
     latInput = document.querySelector('#lat-input')
     lonInput = document.querySelector('#lon-input')
     radiusInput = document.querySelector('#radius-input')
 
     inputCheckBox.addEventListener("change", handleChange);
+    locationToggle.addEventListener("click", toggleLocationFields);
 
     await persistState();
+    await loadLocationPanelState();
     loadLocationInputs();
     await loadLastData();
     await syncTrackingIfChecked();
@@ -56,6 +62,7 @@ async function handleChange(){
 
         const validation = validateLocation(lat, lon, radius)
         if (!validation.ok) {
+            showLocationFields(true)
             alert(validation.message)
             inputCheckBox.checked = false
             await chrome.storage.local.set({checked: false})
@@ -109,6 +116,22 @@ async function syncTrackingIfChecked() {
         lon: lon,
         radius: radius
     })
+}
+
+function showLocationFields(open) {
+    if (!locationFields || !locationToggle) return
+    locationFields.hidden = !open
+    locationToggle.setAttribute('aria-expanded', open ? 'true' : 'false')
+    chrome.storage.local.set({ locationPanelOpen: open })
+}
+
+function toggleLocationFields() {
+    showLocationFields(locationFields.hidden)
+}
+
+async function loadLocationPanelState() {
+    const stored = await chrome.storage.local.get(['locationPanelOpen'])
+    showLocationFields(stored.locationPanelOpen === true)
 }
 
 async function loadLocationInputs(){

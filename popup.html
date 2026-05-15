@@ -21,6 +21,10 @@
         <div id="cards-container">
         </div>
         <footer id="footer">
+            <button type="button" id="location-toggle" class="location-toggle" aria-expanded="false">
+                Location
+            </button>
+            <div id="location-fields" class="location-fields" hidden>
             <div>
                 <label>
                     Latitude:
@@ -38,6 +42,7 @@
                     Radius (km):
                     <input id="radius-input" type="text">
                 </label>
+            </div>
             </div>
         </footer>
         <script src="popup.js"></script>

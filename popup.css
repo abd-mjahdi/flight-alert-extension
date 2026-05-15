@@ -1,94 +1,96 @@
-/* SkyAlert popup — dark aviation theme */
-/*this style was ai generated*/
+/* ChatGPT-style dark: black / white, compact */
 :root {
-    --bg: #0f1419;
-    --surface: #1a2332;
-    --surface-hover: #243044;
-    --border: #2d3a4d;
-    --text: #e6edf3;
-    --text-muted: #8b9cb3;
-    --accent: #58a6ff;
-    --accent-soft: rgba(88, 166, 255, 0.15);
-    --success: #3fb950;
+    --bg: #212121;
+    --surface: #2f2f2f;
+    --surface-hover: #3a3a3a;
+    --border: #424242;
+    --text: #ececec;
+    --text-muted: #8e8e8e;
+    --text-dim: #b4b4b4;
     --radius: 10px;
-    --shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    --radius-sm: 8px;
 }
 
 * {
     box-sizing: border-box;
 }
 
+html,
 body {
     margin: 0;
     padding: 0;
-    width: 380px;
-    min-height: 420px;
-    max-height: 560px;
+    border-radius: 0;
+}
+
+body {
+    width: 340px;
+    min-height: 380px;
+    max-height: 520px;
     background: var(--bg);
     color: var(--text);
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-    font-size: 14px;
-    line-height: 1.45;
+    font-size: 11px;
+    line-height: 1.4;
     display: flex;
     flex-direction: column;
 }
 
 #header {
     flex-shrink: 0;
-    padding: 14px 16px;
-    background: var(--surface);
+    padding: 10px 12px;
+    background: var(--bg);
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
 }
 
 #app-title {
     margin: 0;
-    font-size: 1.25rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
     color: var(--text);
 }
 
 #header label {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 5px;
     cursor: pointer;
-    color: var(--text-muted);
-    font-size: 13px;
+    color: var(--text-dim);
+    font-size: 10px;
 }
 
 #checkbox-input {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--accent);
+    width: 13px;
+    height: 13px;
+    accent-color: var(--text);
     cursor: pointer;
 }
 
 .plane-count {
-    font-size: 12px;
+    font-size: 10px;
     color: var(--text-muted);
 }
 
 #plane-count-value {
     font-weight: 600;
-    color: var(--accent);
+    color: var(--text);
 }
 
 #cards-container {
     flex: 1;
     overflow-y: auto;
-    padding: 12px;
+    padding: 8px 10px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
 }
 
 #cards-container::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
 }
 
 #cards-container::-webkit-scrollbar-track {
@@ -97,7 +99,7 @@ body {
 
 #cards-container::-webkit-scrollbar-thumb {
     background: var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
 }
 
 #cards-container::-webkit-scrollbar-thumb:hover {
@@ -106,10 +108,10 @@ body {
 
 .status-message {
     margin: 0;
-    padding: 10px 16px;
-    font-size: 12px;
-    background: rgba(248, 81, 73, 0.12);
-    color: #f85149;
+    padding: 6px 12px;
+    font-size: 10px;
+    background: #2a2a2a;
+    color: var(--text-dim);
     border-bottom: 1px solid var(--border);
 }
 
@@ -119,65 +121,65 @@ body {
 
 .no-planes-msg {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 10px;
     text-align: center;
     margin: 0;
-    padding: 16px;
+    padding: 12px;
 }
 
 .plane-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 12px 14px;
+    padding: 8px 10px;
     transition: background 0.15s, border-color 0.15s;
 }
 
 .plane-card:hover {
     background: var(--surface-hover);
-    border-color: var(--accent-soft);
+    border-color: #565656;
 }
 
 .plane-card .top {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .plane-card .callsign {
     font-weight: 600;
-    font-size: 15px;
+    font-size: 11px;
     color: var(--text);
 }
 
 .plane-card .distance {
-    font-size: 12px;
+    font-size: 10px;
     color: var(--text-muted);
 }
 
 .plane-card .type {
-    font-size: 13px;
-    color: var(--accent);
-    margin-bottom: 4px;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 2px;
 }
 
 .plane-card .info {
-    font-size: 12px;
+    font-size: 10px;
     color: var(--text-muted);
 }
 
 #footer {
     flex-shrink: 0;
-    padding: 14px 16px;
-    background: var(--surface);
+    padding: 10px 12px;
+    background: var(--bg);
     border-top: 1px solid var(--border);
-    font-size: 12px;
+    font-size: 10px;
     color: var(--text-muted);
 }
 
 #footer > div {
-    margin-bottom: 10px;
+    margin-bottom: 6px;
 }
 
 #footer > div:last-child {
@@ -187,31 +189,32 @@ body {
 #footer label {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     cursor: text;
     min-width: 0;
     width: 100%;
+    font-size: 10px;
+    color: var(--text-dim);
 }
 
 #footer input {
     flex: 1;
     min-width: 0;
-    padding: 8px 10px;
-    background: var(--bg);
+    padding: 5px 8px;
+    background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     color: var(--text);
-    font-size: 13px;
+    font-size: 10px;
     font-family: inherit;
 }
 
 #footer input:focus {
     outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-soft);
+    border-color: #565656;
+    background: var(--surface-hover);
 }
 
 #footer input::placeholder {
     color: var(--text-muted);
-    opacity: 0.8;
 }

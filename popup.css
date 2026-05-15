@@ -276,9 +276,14 @@ body {
     cursor: pointer;
 }
 
-.location-update:hover {
+.location-update:hover:not(:disabled) {
     background: var(--surface-hover);
     color: var(--text);
+}
+
+.location-update:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 .location-fields {

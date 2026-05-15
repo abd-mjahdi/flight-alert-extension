@@ -1,13 +1,18 @@
 const TRACKING_ALARM = 'tracking';
-const interval = 30000;
-const FETCH_BOX_MARGIN = 1.2;
+const BACKOFF_ALARM = 'backoff';
+const interval = 120000;
+const FETCH_BOX_MARGIN = 1.05;
 const DISTANCE_TOLERANCE_KM = 0.2;
+const MAX_NEW_METADATA_PER_TICK = 3;
+const MAX_RADIUS_KM = 150;
 let currentArea = null;
 let userLat = null;
 let userLon = null;
 let searchRadiusKm = null;
 let tickInProgress = false;
-const aircraftModelCache = {};
+let lastTickTime = 0;
+let rateLimitRemaining = null;
+let aircraftModelCache = {};
 
 const DEFAULT_AREA = {
     lamin: 24.8,
@@ -19,6 +24,7 @@ const DEFAULT_AREA = {
 chrome.runtime.onMessage.addListener(handleMessage);
 chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === TRACKING_ALARM) processTrackingTick();
+    if (alarm.name === BACKOFF_ALARM) resumeAfterBackoff();
 });
 
 function isValidLocation(lat, lon, radius) {
@@ -26,12 +32,19 @@ function isValidLocation(lat, lon, radius) {
     if (Number.isNaN(lat) || Number.isNaN(lon) || Number.isNaN(radius)) return false;
     if (lat < -90 || lat > 90) return false;
     if (lon < -180 || lon > 180) return false;
-    if (radius <= 0 || radius > 500) return false;
+    if (radius <= 0 || radius > MAX_RADIUS_KM) return false;
     return true;
 }
 
 function handleMessage(message) {
     if (!message || !message.type) return;
+
+    if (message.type === 'updateLocation') {
+        const { lat, lon, radius } = message;
+        if (!isValidLocation(lat, lon, radius)) return;
+        setAreaFromLatLonRadius(lat, lon, radius);
+        return;
+    }
 
     if (message.type === 'startTracking') {
         const { lat, lon, radius } = message;
@@ -51,12 +64,27 @@ async function fetchStatesInArea() {
     const url = `https://opensky-network.org/api/states/all?lamin=${area.lamin}&lamax=${area.lamax}&lomin=${area.lomin}&lomax=${area.lomax}`;
     try {
         const response = await fetch(url);
+
+        const remaining = response.headers.get('X-Rate-Limit-Remaining');
+        if (remaining != null) rateLimitRemaining = parseInt(remaining, 10);
+
         if (!response.ok) {
             if (response.status === 429) {
-                return { error: 'Too many requests. Wait a few minutes and try again.' };
+                const retryAfter = response.headers.get('X-Rate-Limit-Retry-After-Seconds');
+                const waitSec = retryAfter ? parseInt(retryAfter, 10) : 300;
+                scheduleBackoff(waitSec);
+                return { error: 'Rate limited. Pausing for ' + Math.ceil(waitSec / 60) + ' min.' };
             }
             return { error: 'Could not fetch flight data. The API may be unavailable.' };
         }
+
+        if (rateLimitRemaining != null && rateLimitRemaining <= 10) {
+            scheduleBackoff(600);
+            const data = await response.json();
+            data._lowCredits = true;
+            return data;
+        }
+
         return await response.json();
     } catch (error) {
         console.error(error);
@@ -64,9 +92,24 @@ async function fetchStatesInArea() {
     }
 }
 
+function scheduleBackoff(waitSeconds) {
+    chrome.alarms.clear(TRACKING_ALARM);
+    chrome.alarms.create(BACKOFF_ALARM, { delayInMinutes: Math.max(waitSeconds / 60, 1) });
+}
+
+function resumeAfterBackoff() {
+    chrome.alarms.clear(BACKOFF_ALARM);
+    chrome.storage.local.get(['checked'], (result) => {
+        if (result.checked === true) {
+            startTracking();
+        }
+    });
+}
+
 async function processTrackingTick() {
     if (tickInProgress) return;
     tickInProgress = true;
+    lastTickTime = Date.now();
     try {
         const data = await fetchStatesInArea();
         if (data && data.error) {
@@ -88,6 +131,10 @@ async function processTrackingTick() {
             aircrafts: preparedObjects,
             numberOfPlanesNearby: preparedObjects.length
         };
+
+        if (data._lowCredits) {
+            finalData.error = 'API credits low. Tracking paused to avoid a block.';
+        }
 
         sendAircraftsData(finalData);
     } finally {
@@ -120,14 +167,19 @@ function haversineKm(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
-async function getAircraftModel(icao24) {
-    if (!icao24) return null;
-    if (Object.prototype.hasOwnProperty.call(aircraftModelCache, icao24)) {
-        return aircraftModelCache[icao24];
-    }
-    const model = await fetchAircraftInfo(icao24);
-    aircraftModelCache[icao24] = model;
-    return model;
+async function loadMetadataCache() {
+    try {
+        const stored = await chrome.storage.local.get(['metadataCache']);
+        if (stored && stored.metadataCache && typeof stored.metadataCache === 'object') {
+            aircraftModelCache = stored.metadataCache;
+        }
+    } catch (_) {}
+}
+
+function saveMetadataCache() {
+    try {
+        chrome.storage.local.set({ metadataCache: aircraftModelCache });
+    } catch (_) {}
 }
 
 async function fetchAircraftInfo(icao24) {
@@ -135,7 +187,7 @@ async function fetchAircraftInfo(icao24) {
         const response = await fetch(`https://opensky-network.org/api/metadata/aircraft/icao/${icao24}`);
         if (!response.ok) return null;
         const data = await response.json();
-        return data.model;
+        return data.model || null;
     } catch {
         return null;
     }
@@ -143,13 +195,19 @@ async function fetchAircraftInfo(icao24) {
 
 function startTracking() {
     chrome.alarms.clear(TRACKING_ALARM, () => {
-        processTrackingTick();
-        chrome.alarms.create(TRACKING_ALARM, { periodInMinutes: interval / 60000 });
+        chrome.alarms.clear(BACKOFF_ALARM, () => {
+            const now = Date.now();
+            if (now - lastTickTime >= interval - 500) {
+                processTrackingTick();
+            }
+            chrome.alarms.create(TRACKING_ALARM, { periodInMinutes: interval / 60000 });
+        });
     });
 }
 
 function stopTracking() {
     chrome.alarms.clear(TRACKING_ALARM);
+    chrome.alarms.clear(BACKOFF_ALARM);
     try { chrome.action.setBadgeText({ text: '' }); } catch (_) {}
 }
 
@@ -168,7 +226,8 @@ function setAreaFromLatLonRadius(lat, lon, radius) {
     };
 }
 
-function restoreTrackingIfNeeded() {
+async function restoreTrackingIfNeeded() {
+    await loadMetadataCache();
     chrome.storage.local.get(['checked', 'lat', 'lon', 'radius'], (result) => {
         if (result.checked !== true) return;
         const lat = result.lat;
@@ -186,33 +245,50 @@ async function prepareData(data, centerLat, centerLon, radiusKm) {
     const states = data.states;
     if (!states || !Array.isArray(states)) return [];
 
-    const results = await Promise.all(
-        states.map(async (state) => {
-            const planeLat = state[6] != null ? Number(state[6]) : NaN;
-            const planeLon = state[5] != null ? Number(state[5]) : NaN;
-            const hasPosition = !Number.isNaN(planeLat) && !Number.isNaN(planeLon);
+    const filtered = [];
+    for (const state of states) {
+        const planeLat = state[6] != null ? Number(state[6]) : NaN;
+        const planeLon = state[5] != null ? Number(state[5]) : NaN;
+        const hasPosition = !Number.isNaN(planeLat) && !Number.isNaN(planeLon);
 
-            let distance = null;
-            if (hasPosition) {
-                distance = Math.round(haversineKm(centerLat, centerLon, planeLat, planeLon) * 10) / 10;
-                if (radiusKm != null && distance > radiusKm + DISTANCE_TOLERANCE_KM) {
-                    return null;
-                }
-            } else if (radiusKm != null) {
-                return null;
+        let distance = null;
+        if (hasPosition) {
+            distance = Math.round(haversineKm(centerLat, centerLon, planeLat, planeLon) * 10) / 10;
+            if (radiusKm != null && distance > radiusKm + DISTANCE_TOLERANCE_KM) {
+                continue;
             }
+        } else if (radiusKm != null) {
+            continue;
+        }
 
-            const aircraftInfo = await getAircraftModel(state[0]);
-            return {
-                callSign: state[1] != null ? String(state[1]).trim() : null,
-                type: aircraftInfo,
-                altitude: state[7],
-                distance: distance,
-                direction: state[10],
-                velocity: state[9]
-            };
-        })
-    );
+        filtered.push({ state, distance });
+    }
 
-    return results.filter((item) => item !== null);
+    let newFetches = 0;
+    const results = [];
+    for (const { state, distance } of filtered) {
+        const icao24 = state[0];
+        let model = null;
+        if (icao24) {
+            if (Object.prototype.hasOwnProperty.call(aircraftModelCache, icao24)) {
+                model = aircraftModelCache[icao24];
+            } else if (newFetches < MAX_NEW_METADATA_PER_TICK) {
+                model = await fetchAircraftInfo(icao24);
+                aircraftModelCache[icao24] = model;
+                newFetches++;
+            }
+        }
+        results.push({
+            callSign: state[1] != null ? String(state[1]).trim() : null,
+            type: model,
+            altitude: state[7],
+            distance: distance,
+            direction: state[10],
+            velocity: state[9]
+        });
+    }
+
+    if (newFetches > 0) saveMetadataCache();
+
+    return results;
 }

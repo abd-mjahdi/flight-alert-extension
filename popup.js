@@ -8,7 +8,7 @@ let locationFields;
 let latInput;
 let lonInput;
 let radiusInput;
-const interval = 30000
+const interval = 120000
 let timeBetweenActivations;
 let lastActivationTime
 
@@ -34,6 +34,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadLastData();
     await syncTrackingIfChecked();
     lastActivationTime = await readLastActivationTime();
+    refreshLocationUpdateButton();
 });
 
 chrome.runtime.onMessage.addListener(handleBackgroundMessage)
@@ -51,8 +52,8 @@ function validateLocation(lat, lon, radius) {
     if (radius <= 0) {
         return { ok: false, message: 'Radius must be greater than 0 km.' }
     }
-    if (radius > 500) {
-        return { ok: false, message: 'Radius must be 500 km or less.' }
+    if (radius > 150) {
+        return { ok: false, message: 'Radius must be 150 km or less to stay within API limits.' }
     }
     return { ok: true }
 }
@@ -89,6 +90,7 @@ async function handleChange(){
         })
         lastActivationTime = Date.now()
         await chrome.storage.local.set({lastActivationTime})
+        refreshLocationUpdateButton()
     }else{
         await chrome.storage.local.set({checked: false})
         chrome.runtime.sendMessage({
@@ -114,7 +116,7 @@ async function syncTrackingIfChecked() {
     if (!validation.ok) return
 
     chrome.runtime.sendMessage({
-        type: 'startTracking',
+        type: 'updateLocation',
         lat: lat,
         lon: lon,
         radius: radius
@@ -132,6 +134,24 @@ function toggleLocationFields() {
     showLocationFields(locationFields.hidden)
 }
 
+function getLocationUpdateCooldownMs() {
+    if (lastActivationTime === undefined) return 0
+    const elapsed = Date.now() - lastActivationTime
+    return elapsed >= interval ? 0 : interval - elapsed
+}
+
+function refreshLocationUpdateButton() {
+    if (!locationUpdateBtn) return
+    const waitMs = getLocationUpdateCooldownMs()
+    if (waitMs > 0) {
+        locationUpdateBtn.disabled = true
+        locationUpdateBtn.title = 'Wait ' + Math.ceil(waitMs / 1000) + 's before refresh'
+    } else {
+        locationUpdateBtn.disabled = false
+        locationUpdateBtn.title = 'Apply location'
+    }
+}
+
 async function applyLocationUpdate() {
     const lat = parseFloat(latInput.value)
     const lon = parseFloat(lonInput.value)
@@ -146,14 +166,32 @@ async function applyLocationUpdate() {
 
     await chrome.storage.local.set({ lat: lat, lon: lon, radius: radius })
 
-    if (inputCheckBox.checked) {
+    if (!inputCheckBox.checked) {
+        return
+    }
+
+    const cooldownMs = getLocationUpdateCooldownMs()
+    if (cooldownMs > 0) {
         chrome.runtime.sendMessage({
-            type: 'startTracking',
+            type: 'updateLocation',
             lat: lat,
             lon: lon,
             radius: radius
         })
+        alert('Location saved. Next scan in about ' + Math.ceil(cooldownMs / 1000) + ' seconds.')
+        refreshLocationUpdateButton()
+        return
     }
+
+    chrome.runtime.sendMessage({
+        type: 'startTracking',
+        lat: lat,
+        lon: lon,
+        radius: radius
+    })
+    lastActivationTime = Date.now()
+    await chrome.storage.local.set({ lastActivationTime: lastActivationTime })
+    refreshLocationUpdateButton()
 }
 
 async function loadLocationPanelState() {

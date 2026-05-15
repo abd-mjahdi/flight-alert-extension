@@ -230,11 +230,21 @@ function createCard(data){
     return planeCard
 }
 
+function setCardsExpanded(hasPlanes) {
+    if (!cardsContainer) return
+    if (hasPlanes) {
+        cardsContainer.classList.add('has-planes')
+    } else {
+        cardsContainer.classList.remove('has-planes')
+    }
+}
+
 function displayAircrafts(data){
     const aircrafts = data?.aircrafts
     if (!aircrafts || !Array.isArray(aircrafts)) return
 
     if (data.error) {
+        setCardsExpanded(false)
         showStatusError(data.error)
         cardsContainer.replaceChildren()
         const msg = document.createElement('p')
@@ -247,12 +257,14 @@ function displayAircrafts(data){
     showStatusError('')
     cardsContainer.replaceChildren()
     if (aircrafts.length === 0) {
+        setCardsExpanded(false)
         const msg = document.createElement('p')
         msg.className = 'no-planes-msg'
         msg.textContent = 'No planes nearby'
         cardsContainer.appendChild(msg)
         return
     }
+    setCardsExpanded(true)
     const planeCards = aircrafts.map(aircraft => createCard(aircraft))
     planeCards.forEach(card => cardsContainer.appendChild(card))
 }

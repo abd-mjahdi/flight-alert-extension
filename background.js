@@ -85,14 +85,34 @@ function formatPauseDuration(waitSeconds) {
 
 function persistPollState() {
     try {
-        chrome.storage.local.set({
-            lastTickTime,
+        const payload = {
             pollingIntervalMs: getPollingIntervalMs(),
             creditWindowStart,
             creditsResetAt,
             lastRateLimitRemaining: rateLimitRemaining
+        };
+        if (lastTickTime > 0) {
+            payload.lastTickTime = lastTickTime;
+        }
+        persistNextScanAt().then((nextScanAt) => {
+            if (nextScanAt) payload.nextScanAt = nextScanAt;
+            chrome.storage.local.set(payload);
+        }).catch(() => {
+            chrome.storage.local.set(payload);
         });
     } catch (_) {}
+}
+
+async function persistNextScanAt() {
+    try {
+        const backoff = await chrome.alarms.get(BACKOFF_ALARM);
+        if (backoff && backoff.scheduledTime) return backoff.scheduledTime;
+        const tracking = await chrome.alarms.get(TRACKING_ALARM);
+        if (tracking && tracking.scheduledTime) return tracking.scheduledTime;
+        if (creditsResetAt > Date.now()) return creditsResetAt;
+        if (lastTickTime > 0) return lastTickTime + getPollingIntervalMs();
+    } catch (_) {}
+    return 0;
 }
 
 function startTickHeartbeat() {
@@ -446,6 +466,7 @@ async function startTracking() {
         processTrackingTick();
     }
     chrome.alarms.create(TRACKING_ALARM, { periodInMinutes: getPollingPeriodMinutes() });
+    persistPollState();
 }
 
 function stopTracking() {

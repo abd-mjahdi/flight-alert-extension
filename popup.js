@@ -41,7 +41,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 chrome.runtime.onMessage.addListener(handleBackgroundMessage)
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return
-    if (changes.lastTickTime || changes.pollingIntervalMs || changes.creditsResetAt || changes.checked) {
+    if (changes.lastTickTime || changes.pollingIntervalMs || changes.creditsResetAt || changes.checked || changes.nextScanAt) {
         refreshLocationUpdateButton()
         updateNextUpdateTimer()
     }
@@ -134,6 +134,23 @@ function toggleLocationFields() {
     showLocationFields(locationFields.hidden)
 }
 
+async function readNextScanAt() {
+    try {
+        const backoff = await chrome.alarms.get('backoff')
+        if (backoff && backoff.scheduledTime) return backoff.scheduledTime
+        const tracking = await chrome.alarms.get('tracking')
+        if (tracking && tracking.scheduledTime) return tracking.scheduledTime
+    } catch (_) {}
+    const stored = await chrome.storage.local.get(['nextScanAt', 'lastTickTime', 'pollingIntervalMs', 'creditsResetAt'])
+    if (Number(stored.nextScanAt) > Date.now()) return Number(stored.nextScanAt)
+    if (Number(stored.creditsResetAt) > Date.now()) return Number(stored.creditsResetAt)
+    const lastTickTime = Number(stored.lastTickTime) || 0
+    const intervalMs = Number(stored.pollingIntervalMs)
+    const interval = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : DEFAULT_POLL_INTERVAL_MS
+    if (lastTickTime > 0) return lastTickTime + interval
+    return 0
+}
+
 async function readPollTiming() {
     const stored = await chrome.storage.local.get(['lastTickTime', 'pollingIntervalMs', 'creditsResetAt', 'checked'])
     const intervalMs = Number(stored.pollingIntervalMs)
@@ -162,14 +179,10 @@ async function updateNextUpdateTimer() {
         nextUpdateTimer.textContent = 'next update —'
         return
     }
-    const timing = await readPollTiming()
-    const now = Date.now()
-    let remaining = remainingCooldownMs(timing.lastTickTime, timing.intervalMs)
-    if (timing.creditsResetAt > now) {
-        remaining = Math.max(remaining, timing.creditsResetAt - now)
-    }
+    const nextScanAt = await readNextScanAt()
+    const remaining = nextScanAt > 0 ? nextScanAt - Date.now() : 0
     if (remaining <= 0) {
-        nextUpdateTimer.textContent = 'next update soon'
+        nextUpdateTimer.textContent = 'next update 0:00'
         return
     }
     nextUpdateTimer.textContent = 'next update ' + formatCountdown(remaining)

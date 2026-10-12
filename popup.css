@@ -124,6 +124,18 @@ body {
     color: var(--text-muted);
 }
 
+.next-update-timer {
+    flex-shrink: 0;
+    padding: 3px 12px;
+    font-size: 10px;
+    color: var(--text-dim);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+    text-align: center;
+}
+
 #plane-count-value {
     font-weight: 600;
     color: var(--text);

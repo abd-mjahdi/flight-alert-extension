@@ -8,6 +8,8 @@ let locationFields;
 let latInput;
 let lonInput;
 let radiusInput;
+let nextUpdateTimer;
+let nextUpdateIntervalId;
 const DEFAULT_POLL_INTERVAL_MS = 4 * 60 * 1000;
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -21,6 +23,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     latInput = document.querySelector('#lat-input')
     lonInput = document.querySelector('#lon-input')
     radiusInput = document.querySelector('#radius-input')
+    nextUpdateTimer = document.querySelector('#next-update-timer')
 
     inputCheckBox.addEventListener("change", handleChange);
     locationToggle.addEventListener("click", toggleLocationFields);
@@ -32,13 +35,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadLastData();
     await syncTrackingIfChecked();
     await refreshLocationUpdateButton();
+    startNextUpdateTimer();
 });
 
 chrome.runtime.onMessage.addListener(handleBackgroundMessage)
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return
-    if (changes.lastTickTime || changes.pollingIntervalMs) {
+    if (changes.lastTickTime || changes.pollingIntervalMs || changes.creditsResetAt || changes.checked) {
         refreshLocationUpdateButton()
+        updateNextUpdateTimer()
     }
 })
 
@@ -84,11 +89,13 @@ async function handleChange(){
             radius: radius
         })
         await refreshLocationUpdateButton()
+        updateNextUpdateTimer()
     }else{
         await chrome.storage.local.set({checked: false})
         chrome.runtime.sendMessage({
             type : "checkboxStatus",
             checked:false})
+        updateNextUpdateTimer()
     }
 }
 
@@ -128,12 +135,50 @@ function toggleLocationFields() {
 }
 
 async function readPollTiming() {
-    const stored = await chrome.storage.local.get(['lastTickTime', 'pollingIntervalMs'])
+    const stored = await chrome.storage.local.get(['lastTickTime', 'pollingIntervalMs', 'creditsResetAt', 'checked'])
     const intervalMs = Number(stored.pollingIntervalMs)
     return {
         lastTickTime: Number(stored.lastTickTime) || 0,
-        intervalMs: Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : DEFAULT_POLL_INTERVAL_MS
+        intervalMs: Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : DEFAULT_POLL_INTERVAL_MS,
+        creditsResetAt: Number(stored.creditsResetAt) || 0,
+        tracking: stored.checked === true
     }
+}
+
+function formatCountdown(ms) {
+    const totalSec = Math.max(0, Math.ceil(ms / 1000))
+    const hours = Math.floor(totalSec / 3600)
+    const mins = Math.floor((totalSec % 3600) / 60)
+    const secs = totalSec % 60
+    const pad = (n) => String(n).padStart(2, '0')
+    if (hours > 0) return hours + ':' + pad(mins) + ':' + pad(secs)
+    return mins + ':' + pad(secs)
+}
+
+async function updateNextUpdateTimer() {
+    if (!nextUpdateTimer) return
+    const tracking = inputCheckBox ? inputCheckBox.checked : false
+    if (!tracking) {
+        nextUpdateTimer.textContent = 'next update —'
+        return
+    }
+    const timing = await readPollTiming()
+    const now = Date.now()
+    let remaining = remainingCooldownMs(timing.lastTickTime, timing.intervalMs)
+    if (timing.creditsResetAt > now) {
+        remaining = Math.max(remaining, timing.creditsResetAt - now)
+    }
+    if (remaining <= 0) {
+        nextUpdateTimer.textContent = 'next update soon'
+        return
+    }
+    nextUpdateTimer.textContent = 'next update ' + formatCountdown(remaining)
+}
+
+function startNextUpdateTimer() {
+    if (nextUpdateIntervalId) clearInterval(nextUpdateIntervalId)
+    updateNextUpdateTimer()
+    nextUpdateIntervalId = setInterval(updateNextUpdateTimer, 1000)
 }
 
 function remainingCooldownMs(lastTickTime, intervalMs) {
@@ -223,6 +268,8 @@ function handleBackgroundMessage(message){
     chrome.storage.local.set({ lastData: data })
     displayAircrafts(data)
     displayPlaneCount(data)
+    updateNextUpdateTimer()
+    refreshLocationUpdateButton()
 }
 
 function sanitize(val) {

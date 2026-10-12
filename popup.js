@@ -8,9 +8,7 @@ let locationFields;
 let latInput;
 let lonInput;
 let radiusInput;
-const interval = 120000
-let timeBetweenActivations;
-let lastActivationTime
+const DEFAULT_POLL_INTERVAL_MS = 4 * 60 * 1000;
 
 document.addEventListener("DOMContentLoaded", async () => {
     inputCheckBox = document.querySelector('#checkbox-input')
@@ -33,11 +31,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadLocationInputs();
     await loadLastData();
     await syncTrackingIfChecked();
-    lastActivationTime = await readLastActivationTime();
-    refreshLocationUpdateButton();
+    await refreshLocationUpdateButton();
 });
 
 chrome.runtime.onMessage.addListener(handleBackgroundMessage)
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return
+    if (changes.lastTickTime || changes.pollingIntervalMs) {
+        refreshLocationUpdateButton()
+    }
+})
 
 function validateLocation(lat, lon, radius) {
     if (isNaN(lat) || isNaN(lon) || isNaN(radius)) {
@@ -74,23 +77,13 @@ async function handleChange(){
         }
 
         await chrome.storage.local.set({checked: true, lat: lat, lon: lon, radius: radius})
-        lastActivationTime = await readLastActivationTime()
-        if(lastActivationTime!==undefined){
-            timeBetweenActivations = Date.now() - lastActivationTime
-            if(timeBetweenActivations<interval){
-                await sleep(interval-timeBetweenActivations)
-            }
-        }
-
         chrome.runtime.sendMessage({
             type: 'startTracking',
             lat: lat,
             lon: lon,
             radius: radius
         })
-        lastActivationTime = Date.now()
-        await chrome.storage.local.set({lastActivationTime})
-        refreshLocationUpdateButton()
+        await refreshLocationUpdateButton()
     }else{
         await chrome.storage.local.set({checked: false})
         chrome.runtime.sendMessage({
@@ -134,15 +127,25 @@ function toggleLocationFields() {
     showLocationFields(locationFields.hidden)
 }
 
-function getLocationUpdateCooldownMs() {
-    if (lastActivationTime === undefined) return 0
-    const elapsed = Date.now() - lastActivationTime
-    return elapsed >= interval ? 0 : interval - elapsed
+async function readPollTiming() {
+    const stored = await chrome.storage.local.get(['lastTickTime', 'pollingIntervalMs'])
+    const intervalMs = Number(stored.pollingIntervalMs)
+    return {
+        lastTickTime: Number(stored.lastTickTime) || 0,
+        intervalMs: Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : DEFAULT_POLL_INTERVAL_MS
+    }
 }
 
-function refreshLocationUpdateButton() {
+function remainingCooldownMs(lastTickTime, intervalMs) {
+    if (!lastTickTime) return 0
+    const elapsed = Date.now() - lastTickTime
+    return elapsed >= intervalMs ? 0 : intervalMs - elapsed
+}
+
+async function refreshLocationUpdateButton() {
     if (!locationUpdateBtn) return
-    const waitMs = getLocationUpdateCooldownMs()
+    const timing = await readPollTiming()
+    const waitMs = remainingCooldownMs(timing.lastTickTime, timing.intervalMs)
     if (waitMs > 0) {
         locationUpdateBtn.disabled = true
         locationUpdateBtn.title = 'Wait ' + Math.ceil(waitMs / 1000) + 's before refresh'
@@ -170,7 +173,8 @@ async function applyLocationUpdate() {
         return
     }
 
-    const cooldownMs = getLocationUpdateCooldownMs()
+    const timing = await readPollTiming()
+    const cooldownMs = remainingCooldownMs(timing.lastTickTime, timing.intervalMs)
     if (cooldownMs > 0) {
         chrome.runtime.sendMessage({
             type: 'updateLocation',
@@ -179,7 +183,7 @@ async function applyLocationUpdate() {
             radius: radius
         })
         alert('Location saved. Next scan in about ' + Math.ceil(cooldownMs / 1000) + ' seconds.')
-        refreshLocationUpdateButton()
+        await refreshLocationUpdateButton()
         return
     }
 
@@ -189,9 +193,7 @@ async function applyLocationUpdate() {
         lon: lon,
         radius: radius
     })
-    lastActivationTime = Date.now()
-    await chrome.storage.local.set({ lastActivationTime: lastActivationTime })
-    refreshLocationUpdateButton()
+    await refreshLocationUpdateButton()
 }
 
 async function loadLocationPanelState() {
@@ -210,15 +212,6 @@ async function loadLocationInputs(){
     if (radiusInput) {
         radiusInput.value = locationData.radius !== undefined ? locationData.radius : ''
     }
-}
-
-function sleep(ms){
-    return new Promise(resolve => setTimeout(resolve,ms))
-}
-
-async function readLastActivationTime(){
-    let timeObject = await chrome.storage.local.get(['lastActivationTime'])
-    return timeObject.lastActivationTime;
 }
 
 function handleBackgroundMessage(message){
